@@ -103,8 +103,7 @@ std::shared_ptr<CBlock> MinerTestingSetup::FinalizeBlock(std::shared_ptr<CBlock>
     // submit block header, so that miner can get the block height from the
     // global state and the node has the topology of the chain
     BlockValidationState ignored;
-    int32_t& nPoSTemperature = mapPoSTemperature[CNetAddr()];
-    BOOST_CHECK(Assert(m_node.chainman)->ProcessNewBlockHeaders(nPoSTemperature, m_node.chainman->ActiveChain().Tip()->GetBlockHash(), {pblock->GetBlockHeader()}, true, ignored, Params()));
+    BOOST_CHECK(Assert(m_node.chainman)->ProcessNewBlockHeaders(m_node.chainman->ActiveChain().Tip()->GetBlockHash(), {pblock->GetBlockHeader()}, true, ignored, Params()));
 
     return pblock;
 }

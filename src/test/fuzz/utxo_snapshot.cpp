@@ -59,8 +59,7 @@ FUZZ_TARGET_INIT(utxo_snapshot, initialize_chain)
     if (fuzzed_data_provider.ConsumeBool()) {
         for (const auto& block : *g_chain) {
             BlockValidationState dummy;
-            int32_t& nPoSTemperature = mapPoSTemperature.begin()->second;
-            bool processed{chainman.ProcessNewBlockHeaders(nPoSTemperature, chainman.ActiveChain().Tip()->GetBlockHash(), {*block}, true, dummy, ::Params())};
+            bool processed{chainman.ProcessNewBlockHeaders(chainman.ActiveChain().Tip()->GetBlockHash(), {*block}, true, dummy, ::Params())};
             Assert(processed);
             const auto* index{WITH_LOCK(::cs_main, return chainman.m_blockman.LookupBlockIndex(block->GetHash()))};
             Assert(index);

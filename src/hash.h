@@ -12,6 +12,7 @@
 #include <crypto/sha256.h>
 #include <prevector.h>
 #include <serialize.h>
+#include <sha3iuf.h>
 #include <span.h>
 #include <uint256.h>
 #include <version.h>
@@ -196,6 +197,53 @@ public:
     HashVerifier<Source>& operator>>(T&& obj)
     {
         ::Unserialize(*this, obj);
+        return *this;
+    }
+};
+
+/** A writer stream (for serialization) that computes a 256-bit hash. */
+class HashWriter2
+{
+private:
+    sha3_context ctx;
+
+public:
+
+    HashWriter2() {
+        sha3_Init256(&ctx);
+    }
+
+    void write(Span<const std::byte> src)
+    {
+        sha3_Update(&ctx, UCharCast(src.data()), src.size());
+    }
+
+    /** Compute the double-SHA3_256 hash of all data written to this object.
+     *
+     * Invalidates this object.
+     */
+    uint256 GetHash() {
+        uint8_t *result;
+        result = sha3_Finalize(&ctx);
+
+        uint8_t *result2;
+        sha3_context ctx2;
+        sha3_Init256(&ctx2);
+        sha3_Update(&ctx2, result, 32);
+        result2 = sha3_Finalize(&ctx2);
+
+        char result3[65];
+        result3[64] = 0;
+        for (int i=0; i<32; i++) {
+            sprintf(result3+i*2, "%02x", result2[31-i]);
+        }
+        return uint256S(result3);
+    }
+
+    template <typename T>
+    HashWriter2& operator<<(const T& obj)
+    {
+        ::Serialize(*this, obj);
         return *this;
     }
 };

@@ -2923,8 +2923,7 @@ void PeerManagerImpl::ProcessHeadersMessage(CNode& pfrom, Peer& peer,
     // Now process all the headers.
     BlockValidationState state;
 
-    int32_t& nPoSTemperature = mapPoSTemperature[pfrom.addr];
-    if (!m_chainman.ProcessNewBlockHeaders(nPoSTemperature, pfrom.lastAcceptedHeader, headers, /*min_pow_checked=*/true, state, m_chainparams, &pindexLast)) {
+    if (!m_chainman.ProcessNewBlockHeaders(pfrom.lastAcceptedHeader, headers, /*min_pow_checked=*/true, state, m_chainparams, &pindexLast)) {
     //if (!m_chainman.ProcessNewBlockHeaders(headers, /*min_pow_checked=*/true, state, &pindexLast)) {
         if (state.IsInvalid()) {
             MaybePunishNodeForBlock(pfrom.GetId(), state, via_compact_block, "invalid header received");
@@ -4269,20 +4268,11 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             }
         }
 
-        int32_t& nPoSTemperature = mapPoSTemperature[pfrom.addr];
         const CBlockIndex *pindex = nullptr;
         BlockValidationState state;
-        if (!m_chainman.ProcessNewBlockHeaders(nPoSTemperature, tip->GetBlockHash(), {cmpctblock.header}, /*min_pow_checked=*/true, state, m_chainparams, &pindex)) {
+        if (!m_chainman.ProcessNewBlockHeaders(tip->GetBlockHash(), {cmpctblock.header}, /*min_pow_checked=*/true, state, m_chainparams, &pindex)) {
             if (state.IsInvalid()) {
                 MaybePunishNodeForBlock(pfrom.GetId(), state, /*via_compact_block=*/true, "invalid header via cmpctblock");
-                return;
-            }
-        }
-
-        if (nPoSTemperature >= MAX_CONSECUTIVE_POS_HEADERS) {
-            nPoSTemperature = (MAX_CONSECUTIVE_POS_HEADERS*3)/4;
-            if (Params().NetworkIDString() != "test") {
-                Misbehaving(*peer, 100, "too many consecutive pos headers");
                 return;
             }
         }
@@ -4616,29 +4606,10 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         headers.resize(nCount);
         {
             LOCK(cs_main);
-            int32_t& nPoSTemperature = mapPoSTemperature[pfrom.addr];
-            int nTmpPoSTemperature = nPoSTemperature;
             for (unsigned int n = 0; n < nCount; n++) {
                 vRecv >> headers[n];
                 ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
                 ReadCompactSize(vRecv); // needed for vchBlockSig.
-
-                // peercoin: quick check to see if we should ban peers for PoS spam
-                // note: at this point we don't know if PoW headers are valid - we just assume they are
-                // so we need to update pfrom->nPoSTemperature once we actualy check them
-                bool fPoS = headers[n].nFlags & CBlockIndex::BLOCK_PROOF_OF_STAKE;
-                nTmpPoSTemperature += fPoS ? 1 : -POW_HEADER_COOLING;
-                // peer cannot cool himself by PoW headers from other branches
-                if (n == 0 && !fPoS && headers[n].hashPrevBlock != pfrom.lastAcceptedHeader)
-                    nTmpPoSTemperature += POW_HEADER_COOLING;
-                nTmpPoSTemperature = std::max(nTmpPoSTemperature, 0);
-                if (nTmpPoSTemperature >= MAX_CONSECUTIVE_POS_HEADERS) {
-                    nPoSTemperature = (MAX_CONSECUTIVE_POS_HEADERS*3)/4;
-                    if (Params().NetworkIDString() != "test") {
-                        Misbehaving(*peer, 100, "too many consecutive pos headers");
-                        return;
-                    }
-                }
             }
         }
 
@@ -4699,18 +4670,6 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             }
 
             if (!fRequested) {
-                int32_t& nPoSTemperature = mapPoSTemperature[pfrom.addr];
-                if (nPoSTemperature >= MAX_CONSECUTIVE_POS_HEADERS) {
-                    nPoSTemperature = (MAX_CONSECUTIVE_POS_HEADERS*3)/4;
-                    if (Params().NetworkIDString() != "test") {
-                        Misbehaving(*peer, 100, "too many consecutive pos headers");
-                        return;
-                    }
-                }
-
-                if (pblock2->IsProofOfStake() && !m_chainman.ActiveChainstate().IsInitialBlockDownload())
-                    nPoSTemperature += 1;
-
                 if (!prev_block->IsValid(BLOCK_VALID_TRANSACTIONS)) {
                     RemoveBlockRequest(hash2, std::nullopt);
                     LogPrint(BCLog::NET, "this block does not connect to any valid known blocks");

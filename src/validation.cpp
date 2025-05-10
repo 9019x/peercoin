@@ -3779,17 +3779,11 @@ bool ChainstateManager::AcceptBlockHeader(const CBlockHeader& block, BlockValida
 }
 
 // Exposed wrapper for AcceptBlockHeader
-bool ChainstateManager::ProcessNewBlockHeaders(int32_t& nPoSTemperature, const uint256& lastAcceptedHeader, const std::vector<CBlockHeader>& headers, bool min_pow_checked, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex)
+bool ChainstateManager::ProcessNewBlockHeaders(const uint256& lastAcceptedHeader, const std::vector<CBlockHeader>& headers, bool min_pow_checked, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex)
 {
     AssertLockNotHeld(cs_main);
     {
         LOCK(cs_main);
-
-        int nCooling = POW_HEADER_COOLING;
-        if (headers[0].hashPrevBlock != lastAcceptedHeader && !lastAcceptedHeader.IsNull()) {
-            nPoSTemperature += (18 + headers.size()) / 10;
-            nCooling = 0;
-        }
 
         for (const CBlockHeader& header : headers) {
             bool fPoS = header.nFlags & CBlockIndex::BLOCK_PROOF_OF_STAKE;
@@ -3798,21 +3792,9 @@ bool ChainstateManager::ProcessNewBlockHeaders(int32_t& nPoSTemperature, const u
             bool accepted{AcceptBlockHeader(header, state, &pindex, min_pow_checked)};
             ActiveChainstate().CheckBlockIndex();
 
-            if (!accepted) {
-                nPoSTemperature += POW_HEADER_COOLING;
-                return false;
-            }
             if (ppindex) {
                 *ppindex = pindex;
             }
-
-            if (fPoS) {
-                nPoSTemperature++;
-            } else { // PoW
-                nPoSTemperature -= nCooling;
-                nPoSTemperature = std::max((int)nPoSTemperature, 0);
-            }
-        }
     }
     if (NotifyHeaderTip(ActiveChainstate())) {
         if (ActiveChainstate().IsInitialBlockDownload() && ppindex && *ppindex) {
